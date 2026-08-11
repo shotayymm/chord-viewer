@@ -25,7 +25,8 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
 .screen.active{display:block;}
 .topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between;
   padding:calc(10px + env(safe-area-inset-top)) 10px 10px; background:var(--bg); border-bottom:1px solid var(--border);}
-.topbar h1{font-size:18px; margin:0;}
+.topbar h1{font-size:18px; margin:0; display:flex; align-items:center; gap:6px;}
+.app-logo-icon{width:22px; height:22px; border-radius:6px; object-fit:cover; flex:0 0 auto;}
 .topbar-title{flex:1; text-align:center; overflow:hidden;}
 .topbar-title > div:first-child{font-size:16px; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;}
 .topbar-sub{font-size:12px; color:var(--text-dim);}
@@ -35,7 +36,12 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
 .btn-save{background:var(--accent); color:#FFFFFF; border:none; font-weight:700; padding:8px 16px; border-radius:8px; font-size:14px; cursor:pointer;}
 
 /* 曲一覧 */
-.song-list{padding:14px; display:flex; flex-direction:column; gap:10px;}
+.song-list{padding:14px; display:flex; flex-direction:column; gap:20px;}
+.category-group-title{font-size:13px; font-weight:700; margin:2px 2px 8px; letter-spacing:0.02em;
+  cursor:pointer; display:flex; align-items:center; gap:5px; padding:4px 2px;}
+.category-arrow{font-size:11px; width:10px; display:inline-block;}
+.category-count{color:var(--text-dim); font-weight:500;}
+.category-group-songs{display:flex; flex-direction:column; gap:10px;}
 .song-card{display:flex; align-items:center; justify-content:space-between; background:var(--surface);
   border:1px solid var(--border); border-radius:12px; padding:14px 16px; cursor:pointer;}
 .song-card-title{font-size:16px; font-weight:700;}
@@ -49,6 +55,9 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
   border-radius:10px; padding:8px 14px; position:relative;}
 .section-line-label{position:absolute; top:4px; left:4px; z-index:2; min-width:20px; text-align:center;
   padding:1px 5px; border-radius:6px; font-weight:700; font-size:11px; line-height:1.4;}
+.list-badge{display:inline-flex; align-items:center; justify-content:center; min-width:26px; padding:3px 8px;
+  border-radius:8px; font-weight:700; font-size:12px; flex:0 0 auto;}
+.list-dot{width:14px; height:14px; border-radius:50%; flex:0 0 auto;}
 .lane{position:relative; height:var(--lane-h);}
 .lane-riff{margin-bottom:2px;}
 .lane-chord{border-bottom:1px dashed var(--border); margin-bottom:2px;}
@@ -155,7 +164,7 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
 <!-- 曲一覧 -->
 <div id="screen-library" class="screen active">
   <header class="topbar">
-    <h1>🎸 コードブック</h1>
+    <h1><img id="app-logo-icon" class="app-logo-icon" alt=""> コードブック</h1>
     <div class="topbar-actions">
       <button class="icon-btn" onclick="openSettings()">⚙️</button>
       <button class="icon-btn" onclick="createNewSong()">＋</button>
@@ -192,6 +201,8 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
     <input id="edit-title" type="text" placeholder="曲名" oninput="editingSong.title=this.value">
     <label>キー</label>
     <input id="edit-key" type="text" placeholder="例: G" oninput="editingSong.key=this.value">
+    <label>カテゴリ</label>
+    <div id="song-category-chips" class="picker-btn-row"></div>
     <div id="edit-sections"></div>
     <button class="btn-block" style="text-align:center;" onclick="addSection()">＋ セクションを追加</button>
     <button class="btn-danger-outline" id="delete-song-btn" style="width:100%; margin-top:24px;" onclick="deleteSong()">この曲を削除</button>
@@ -320,6 +331,7 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
     </div>
     <hr>
     <button class="btn-block" style="text-align:center;" onclick="openTypeManager()">🏷️ セクションの種類を編集</button>
+    <button class="btn-block" style="text-align:center;" onclick="openCategoryManager()">📁 カテゴリを編集</button>
     <hr>
     <div class="setting-row-buttons">
       <button class="btn-secondary" onclick="exportBackup()">📤 バックアップを書き出す</button>
@@ -353,6 +365,27 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
   </div>
 </div>
 
+<!-- カテゴリ 一覧 -->
+<div id="category-manager-modal" class="overlay hidden">
+  <div class="sheet-card">
+    <div class="sheet-head"><span>カテゴリ</span><button class="icon-btn" onclick="closeCategoryManager()">✕</button></div>
+    <div id="category-manager-list"></div>
+    <button class="btn-block" style="text-align:center;" onclick="openCategoryEditorNew()">＋ 新しいカテゴリを追加</button>
+  </div>
+</div>
+
+<!-- カテゴリ 編集 -->
+<div id="category-editor-modal" class="overlay hidden">
+  <div class="sheet-card">
+    <div class="sheet-head"><span id="category-editor-title">カテゴリを編集</span><button class="icon-btn" onclick="closeCategoryEditor()">✕</button></div>
+    <input id="category-editor-label" type="text" placeholder="例: ロック, 弾き語り, カバー" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:15px; margin-bottom:16px;">
+    <div class="riff-editor-actions">
+      <button class="btn-danger-outline" id="category-delete-btn" onclick="deleteCategory()">削除</button>
+      <button class="btn-primary" onclick="saveCategory()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ===== セクション種別の定義(色・明るいテーマ用) ===== */
 const DEFAULT_SECTION_TYPES = {
@@ -366,6 +399,9 @@ const DEFAULT_SECTION_TYPES = {
 };
 const TYPE_COLOR_PALETTE = ['#5B7DB1','#0F8577','#B8791A','#C1433D','#7C5CBF','#5B6472','#9C6B3F','#3F7CAC','#8A6BBF','#4F8A5B','#B0555E','#6B8E4E'];
 let sectionTypes = {};
+let categories = {};
+let categoryEditorContext = null;
+let categoryQuickAddMode = false;
 function hexToRgba(hex, alpha){
   const h = (hex||'#5B5F66').replace('#','');
   const r = parseInt(h.substring(0,2),16)||0;
@@ -373,8 +409,8 @@ function hexToRgba(hex, alpha){
   const b = parseInt(h.substring(4,6),16)||0;
   return `rgba(${r},${g},${b},${alpha})`;
 }
-function pickNextColor(){
-  const used = Object.values(sectionTypes).map(t=>t.color);
+function pickNextColor(pool){
+  const used = Object.values(pool).map(t=>t.color);
   return TYPE_COLOR_PALETTE.find(c=>!used.includes(c)) || TYPE_COLOR_PALETTE[Math.floor(Math.random()*TYPE_COLOR_PALETTE.length)];
 }
 const STRING_LABELS = ['e','B','G','D','A','E'];
@@ -516,6 +552,7 @@ function migrateSongs(list){
 /* ===== データ読み書き ===== */
 function loadData(){
   loadSectionTypes();
+  loadCategories();
   try{ songs = JSON.parse(localStorage.getItem('cb_songs')||'null') || sampleSongs(); }
   catch(e){ songs = sampleSongs(); }
   migrateSongs(songs);
@@ -528,6 +565,11 @@ function loadSectionTypes(){
   catch(e){ sectionTypes = JSON.parse(JSON.stringify(DEFAULT_SECTION_TYPES)); }
 }
 function saveSectionTypes(){ localStorage.setItem('cb_section_types', JSON.stringify(sectionTypes)); }
+function loadCategories(){
+  try{ categories = JSON.parse(localStorage.getItem('cb_categories')||'null') || {}; }
+  catch(e){ categories = {}; }
+}
+function saveCategories(){ localStorage.setItem('cb_categories', JSON.stringify(categories)); }
 function saveSongs(){ localStorage.setItem('cb_songs', JSON.stringify(songs)); }
 function saveSettings(){ localStorage.setItem('cb_settings', JSON.stringify(settings)); }
 function applySettings(){
@@ -543,24 +585,53 @@ function showScreen(name){
 }
 
 /* ===== 曲一覧 ===== */
+let expandedCategories = new Set();
 function renderLibrary(){
   const list = document.getElementById('song-list');
   if(songs.length===0){
     list.innerHTML = '<div class="empty-state">曲がありません。<br>右上の＋から追加してください。</div>';
     return;
   }
-  list.innerHTML = songs.map(s=>`
+  let html = '';
+  Object.keys(categories).forEach(catId=>{
+    const matched = songs.filter(s=>(s.categoryIds||[]).includes(catId));
+    if(matched.length===0) return;
+    html += renderCategoryGroup(catId, categories[catId].label, categories[catId].color, matched);
+  });
+  const uncategorized = songs.filter(s=>!(s.categoryIds && s.categoryIds.length));
+  if(uncategorized.length>0){
+    html += renderCategoryGroup('__uncategorized__', '未分類', null, uncategorized);
+  }
+  list.innerHTML = html || '<div class="empty-state">曲がありません。<br>右上の＋から追加してください。</div>';
+}
+function toggleCategoryGroup(catId){
+  if(expandedCategories.has(catId)){ expandedCategories.delete(catId); } else { expandedCategories.add(catId); }
+  renderLibrary();
+}
+function renderCategoryGroup(catId, label, color, songList){
+  const style = color ? `color:${color};` : `color:var(--text-dim);`;
+  const isOpen = expandedCategories.has(catId);
+  const songsHtml = isOpen ? `<div class="category-group-songs">${songList.map(renderSongCard).join('')}</div>` : '';
+  return `
+    <div class="category-group">
+      <div class="category-group-title" style="${style}" onclick="toggleCategoryGroup('${catId}')">
+        <span class="category-arrow">${isOpen?'▾':'▸'}</span> ${escapeHtml(label)} <span class="category-count">(${songList.length})</span>
+      </div>
+      ${songsHtml}
+    </div>`;
+}
+function renderSongCard(s){
+  return `
     <div class="song-card" onclick="openDisplay('${s.id}')">
       <div>
         <div class="song-card-title">${escapeHtml(s.title||'無題')}</div>
         <div class="song-card-sub">${escapeHtml(s.key||'Key未設定')} ・ ${s.sections.length}セクション</div>
       </div>
       <button class="icon-btn" onclick="event.stopPropagation(); openEdit('${s.id}')">✎</button>
-    </div>
-  `).join('');
+    </div>`;
 }
 function createNewSong(){
-  editingSong = {id:uid(), title:'', key:'', sections:[]};
+  editingSong = {id:uid(), title:'', key:'', sections:[], categoryIds:[]};
   isNewSong = true;
   originalSongSnapshot = JSON.stringify(editingSong);
   document.getElementById('edit-header-title').textContent = '新しい曲';
@@ -650,6 +721,7 @@ function closeRiffModal(){ document.getElementById('riff-modal').classList.add('
 function openEdit(songId){
   const song = songs.find(s=>s.id===songId);
   editingSong = JSON.parse(JSON.stringify(song));
+  editingSong.categoryIds = editingSong.categoryIds || [];
   isNewSong = false;
   originalSongSnapshot = JSON.stringify(editingSong);
   document.getElementById('edit-header-title').textContent = '曲を編集';
@@ -663,6 +735,7 @@ function hasUnsavedChanges(){
 function renderEdit(){
   document.getElementById('edit-title').value = editingSong.title||'';
   document.getElementById('edit-key').value = editingSong.key||'';
+  renderCategoryChipsInEdit();
   const container = document.getElementById('edit-sections');
   container.innerHTML = editingSong.sections.map((sec,si)=>{
     const meta = sectionMeta(sec);
@@ -1110,7 +1183,7 @@ function renderTypeManagerList(){
           <div class="song-card-title">${escapeHtml(t.label)}</div>
           <div class="song-card-sub">略称: ${escapeHtml(t.abbr||'(なし)')}</div>
         </div>
-        <span class="section-line-label" style="background:${hexToRgba(t.color,0.14)}; color:${t.color};">${escapeHtml(t.abbr||'?')}</span>
+        <span class="list-badge" style="background:${hexToRgba(t.color,0.14)}; color:${t.color};">${escapeHtml(t.abbr||'?')}</span>
       </div>`;
   }).join('');
 }
@@ -1138,7 +1211,7 @@ async function saveType(){
     sectionTypes[typeEditorContext].label = label;
     sectionTypes[typeEditorContext].abbr = abbr;
   }else{
-    sectionTypes['type-'+uid()] = {label, abbr, color: pickNextColor()};
+    sectionTypes['type-'+uid()] = {label, abbr, color: pickNextColor(sectionTypes)};
   }
   saveSectionTypes();
   closeTypeEditor();
@@ -1160,9 +1233,108 @@ async function deleteType(){
   if(currentSongId){ renderDisplay(); }
 }
 
+/* ===== 曲のカテゴリ管理 ===== */
+function openCategoryManager(){
+  renderCategoryManagerList();
+  document.getElementById('category-manager-modal').classList.remove('hidden');
+}
+function closeCategoryManager(){ document.getElementById('category-manager-modal').classList.add('hidden'); }
+function renderCategoryManagerList(){
+  const list = document.getElementById('category-manager-list');
+  const keys = Object.keys(categories);
+  if(keys.length===0){
+    list.innerHTML = '<div class="empty-inline">カテゴリがありません。</div>';
+    return;
+  }
+  list.innerHTML = keys.map(k=>{
+    const c = categories[k];
+    return `
+      <div class="song-card" onclick="openCategoryEditorExisting('${k}')">
+        <div class="song-card-title">${escapeHtml(c.label)}</div>
+        <span class="list-dot" style="background:${c.color};"></span>
+      </div>`;
+  }).join('');
+}
+function openCategoryEditorNew(){ categoryQuickAddMode = false; openCategoryEditor(null); }
+function openCategoryEditorExisting(key){ categoryQuickAddMode = false; openCategoryEditor(key); }
+function quickAddCategory(){ categoryQuickAddMode = true; openCategoryEditor(null); }
+function openCategoryEditor(key){
+  categoryEditorContext = key;
+  const c = key ? categories[key] : {label:''};
+  document.getElementById('category-editor-title').textContent = key ? 'カテゴリを編集' : '新しいカテゴリを追加';
+  document.getElementById('category-editor-label').value = c.label;
+  document.getElementById('category-delete-btn').style.display = key ? 'inline-block' : 'none';
+  document.getElementById('category-editor-modal').classList.remove('hidden');
+}
+function closeCategoryEditor(){
+  document.getElementById('category-editor-modal').classList.add('hidden');
+  categoryEditorContext = null;
+}
+async function saveCategory(){
+  const label = document.getElementById('category-editor-label').value.trim();
+  if(!label){
+    await showConfirm('カテゴリ名を入力してください。', {okOnly:true});
+    return;
+  }
+  let newKey = null;
+  if(categoryEditorContext){
+    categories[categoryEditorContext].label = label;
+  }else{
+    newKey = 'cat-'+uid();
+    categories[newKey] = {label, color: pickNextColor(categories)};
+  }
+  saveCategories();
+  closeCategoryEditor();
+  renderCategoryManagerList();
+  renderLibrary();
+  if(editingSong){
+    if(newKey && categoryQuickAddMode){
+      editingSong.categoryIds = editingSong.categoryIds || [];
+      editingSong.categoryIds.push(newKey);
+    }
+    renderCategoryChipsInEdit();
+  }
+  categoryQuickAddMode = false;
+}
+async function deleteCategory(){
+  const key = categoryEditorContext;
+  const inUse = songs.some(s=>(s.categoryIds||[]).includes(key));
+  const msg = inUse
+    ? 'このカテゴリを削除しますか?\n使用中の曲があります。削除すると曲から外れます。'
+    : 'このカテゴリを削除しますか?';
+  const ok = await showConfirm(msg, {okText:'削除する', danger:true});
+  if(!ok) return;
+  delete categories[key];
+  songs.forEach(s=>{ if(s.categoryIds){ s.categoryIds = s.categoryIds.filter(id=>id!==key); } });
+  saveSongs();
+  saveCategories();
+  closeCategoryEditor();
+  renderCategoryManagerList();
+  renderLibrary();
+  if(editingSong){ editingSong.categoryIds = (editingSong.categoryIds||[]).filter(id=>id!==key); renderCategoryChipsInEdit(); }
+}
+function renderCategoryChipsInEdit(){
+  const container = document.getElementById('song-category-chips');
+  if(!container) return;
+  const keys = Object.keys(categories);
+  const chipsHtml = keys.map(k=>{
+    const c = categories[k];
+    const selected = (editingSong.categoryIds||[]).includes(k);
+    const styleAttr = selected ? '' : `color:${c.color}; border-color:${c.color};`;
+    return `<button type="button" class="picker-btn ${selected?'selected':''}" style="${styleAttr}" onclick="toggleSongCategory('${k}')">${escapeHtml(c.label)}</button>`;
+  }).join('');
+  container.innerHTML = chipsHtml + `<button type="button" class="picker-btn" onclick="quickAddCategory()">＋ 新規</button>`;
+}
+function toggleSongCategory(key){
+  editingSong.categoryIds = editingSong.categoryIds || [];
+  const idx = editingSong.categoryIds.indexOf(key);
+  if(idx>=0){ editingSong.categoryIds.splice(idx,1); } else { editingSong.categoryIds.push(key); }
+  renderCategoryChipsInEdit();
+}
+
 /* ===== バックアップ ===== */
 function exportBackup(){
-  const data = JSON.stringify({songs, settings, sectionTypes}, null, 2);
+  const data = JSON.stringify({songs, settings, sectionTypes, categories}, null, 2);
   const blob = new Blob([data], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1182,6 +1354,7 @@ async function importBackup(event){
     try{
       const data = JSON.parse(e.target.result);
       if(data.sectionTypes){ sectionTypes = data.sectionTypes; saveSectionTypes(); }
+      if(data.categories){ categories = data.categories; saveCategories(); }
       if(data.songs){ songs = migrateSongs(data.songs); saveSongs(); }
       if(data.settings){ settings = Object.assign(settings, data.settings); saveSettings(); applySettings(); }
       renderLibrary();
@@ -1198,6 +1371,8 @@ async function importBackup(event){
 window.addEventListener('DOMContentLoaded', ()=>{
   loadData();
   renderLibrary();
+  const iconLink = document.querySelector('link[rel="apple-touch-icon"]');
+  if(iconLink){ document.getElementById('app-logo-icon').src = iconLink.href; }
   document.getElementById('confirm-ok-btn').addEventListener('click', ()=>{
     document.getElementById('confirm-modal').classList.add('hidden');
     const r = confirmResolve; confirmResolve = null;
