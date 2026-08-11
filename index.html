@@ -55,6 +55,7 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
   border-radius:10px; padding:8px 14px; position:relative;}
 .section-line-label{position:absolute; top:4px; left:4px; z-index:2; min-width:20px; text-align:center;
   padding:1px 5px; border-radius:6px; font-weight:700; font-size:11px; line-height:1.4;}
+.section-row-stack.with-top-divider{border-top:1px dashed var(--border); margin-top:8px; padding-top:8px;}
 .list-badge{display:inline-flex; align-items:center; justify-content:center; min-width:26px; padding:3px 8px;
   border-radius:8px; font-weight:700; font-size:12px; flex:0 0 auto;}
 .list-dot{width:14px; height:14px; border-radius:50%; flex:0 0 auto;}
@@ -656,17 +657,27 @@ function renderDisplay(){
     body.innerHTML = '<div class="empty-state">セクションがありません。<br>✎ボタンから編集して追加してください。</div>';
     return;
   }
-  body.innerHTML = song.sections.map(sec=>{
-    const meta = sectionMeta(sec);
-    return `<div class="section-block">${renderSectionLineReadonly(sec, meta)}</div>`;
+  const groups = groupConsecutiveSections(song.sections);
+  body.innerHTML = groups.map(group=>{
+    const meta = sectionMeta(group[0]);
+    const inner = group.length>1 ? renderSectionLineGroupReadonly(group, meta) : renderSectionLineReadonly(group[0], meta);
+    return `<div class="section-block">${inner}</div>`;
   }).join('');
 }
-function renderSectionLineReadonly(sec, meta){
-  const items = sec.items || [];
-  const labelHtml = `<span class="section-line-label" style="background:${meta.bg}; color:${meta.color}">${escapeHtml(meta.abbr)}</span>`;
-  if(items.length===0){
-    return `<div class="section-line" style="--sec-color:${meta.color}">${labelHtml}<div class="empty-inline">要素なし</div></div>`;
+function groupConsecutiveSections(sections){
+  const groups = [];
+  let i = 0;
+  while(i < sections.length){
+    let j = i+1;
+    while(j < sections.length && sectionsMatch(sections[i], sections[j])){ j++; }
+    groups.push(sections.slice(i, j));
+    i = j;
   }
+  return groups;
+}
+function renderLanesHtml(sec){
+  const items = sec.items || [];
+  if(items.length===0){ return '<div class="empty-inline">要素なし</div>'; }
   const riffHtml = items.filter(it=>it.type==='riff').map(it=>
     `<div class="ro-item item-riff-marker" style="left:${clampPos(it.pos)}%" onclick="openRiffViewByIds('${sec.id}','${it.id}')"></div>`
   ).join('');
@@ -677,11 +688,27 @@ function renderSectionLineReadonly(sec, meta){
     `<div class="ro-item item-lyric" style="left:${clampPos(it.pos)}%">${escapeHtml(it.value||'')}</div>`
   ).join('');
   return `
+    <div class="lane lane-riff">${riffHtml}</div>
+    <div class="lane lane-chord">${chordHtml}</div>
+    <div class="lane lane-lyric">${lyricHtml}</div>`;
+}
+function renderSectionLineReadonly(sec, meta){
+  const labelHtml = `<span class="section-line-label" style="background:${meta.bg}; color:${meta.color}">${escapeHtml(meta.abbr)}</span>`;
+  return `
     <div class="section-line" style="--sec-color:${meta.color}">
       ${labelHtml}
-      <div class="lane lane-riff">${riffHtml}</div>
-      <div class="lane lane-chord">${chordHtml}</div>
-      <div class="lane lane-lyric">${lyricHtml}</div>
+      ${renderLanesHtml(sec)}
+    </div>`;
+}
+function renderSectionLineGroupReadonly(group, meta){
+  const labelHtml = `<span class="section-line-label" style="background:${meta.bg}; color:${meta.color}">${escapeHtml(meta.abbr)}</span>`;
+  const rowsHtml = group.map((sec,idx)=>
+    `<div class="section-row-stack${idx>0?' with-top-divider':''}">${renderLanesHtml(sec)}</div>`
+  ).join('');
+  return `
+    <div class="section-line" style="--sec-color:${meta.color}">
+      ${labelHtml}
+      ${rowsHtml}
     </div>`;
 }
 function openEditFromDisplay(){ openEdit(currentSongId); }
@@ -800,6 +827,11 @@ function moveSection(index, dir){
   const arr = editingSong.sections;
   [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
   renderEdit();
+}
+function sectionsMatch(a, b){
+  if(a.type !== b.type) return false;
+  if(a.type === 'custom'){ return (a.customLabel||'') === (b.customLabel||''); }
+  return true;
 }
 function saveSong(){
   editingSong.title = document.getElementById('edit-title').value.trim();
