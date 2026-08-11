@@ -45,11 +45,10 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
 /* 表示画面: セクションごとに1本の横棒(画面幅いっぱい)、3レーン(リフ/コード/歌詞) */
 .display-body{padding:16px 16px 60px;}
 .section-block{margin-bottom:10px;}
-.section-row{display:flex; align-items:stretch; gap:8px;}
-.section-line-label{flex:0 0 auto; width:32px; display:flex; align-items:center; justify-content:center;
-  border-radius:8px; font-weight:700; font-size:13px;}
-.section-line{flex:1; min-width:0; background:var(--surface); border:1px solid var(--border);
+.section-line{width:100%; background:var(--surface); border:2px solid var(--sec-color, var(--border));
   border-radius:10px; padding:8px 14px; position:relative;}
+.section-line-label{position:absolute; top:4px; left:4px; z-index:2; min-width:20px; text-align:center;
+  padding:1px 5px; border-radius:6px; font-weight:700; font-size:11px; line-height:1.4;}
 .lane{position:relative; height:var(--lane-h);}
 .lane-riff{margin-bottom:2px;}
 .lane-chord{border-bottom:1px dashed var(--border); margin-bottom:2px;}
@@ -595,7 +594,7 @@ function renderSectionLineReadonly(sec, meta){
   const items = sec.items || [];
   const labelHtml = `<span class="section-line-label" style="background:${meta.bg}; color:${meta.color}">${escapeHtml(meta.abbr)}</span>`;
   if(items.length===0){
-    return `<div class="section-row">${labelHtml}<div class="section-line"><div class="empty-inline">要素なし</div></div></div>`;
+    return `<div class="section-line" style="--sec-color:${meta.color}">${labelHtml}<div class="empty-inline">要素なし</div></div>`;
   }
   const riffHtml = items.filter(it=>it.type==='riff').map(it=>
     `<div class="ro-item item-riff-marker" style="left:${clampPos(it.pos)}%" onclick="openRiffViewByIds('${sec.id}','${it.id}')"></div>`
@@ -607,13 +606,11 @@ function renderSectionLineReadonly(sec, meta){
     `<div class="ro-item item-lyric" style="left:${clampPos(it.pos)}%">${escapeHtml(it.value||'')}</div>`
   ).join('');
   return `
-    <div class="section-row">
+    <div class="section-line" style="--sec-color:${meta.color}">
       ${labelHtml}
-      <div class="section-line">
-        <div class="lane lane-riff">${riffHtml}</div>
-        <div class="lane lane-chord">${chordHtml}</div>
-        <div class="lane lane-lyric">${lyricHtml}</div>
-      </div>
+      <div class="lane lane-riff">${riffHtml}</div>
+      <div class="lane lane-chord">${chordHtml}</div>
+      <div class="lane lane-lyric">${lyricHtml}</div>
     </div>`;
 }
 function openEditFromDisplay(){ openEdit(currentSongId); }
