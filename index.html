@@ -206,7 +206,8 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
     <div id="song-category-chips" class="picker-btn-row"></div>
     <div id="edit-sections"></div>
     <button class="btn-block" style="text-align:center;" onclick="addSection()">＋ セクションを追加</button>
-    <button class="btn-danger-outline" id="delete-song-btn" style="width:100%; margin-top:24px;" onclick="deleteSong()">この曲を削除</button>
+    <button class="btn-block" style="text-align:center; margin-top:24px;" onclick="exportSong(editingSong)">📤 この曲を書き出す</button>
+    <button class="btn-danger-outline" id="delete-song-btn" style="width:100%; margin-top:10px;" onclick="deleteSong()">この曲を削除</button>
   </div>
 </div>
 
@@ -339,6 +340,8 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
       <button class="btn-secondary" onclick="document.getElementById('import-file').click()">📥 バックアップを読み込む</button>
     </div>
     <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importBackup(event)">
+    <button class="btn-block" style="text-align:center; margin-top:6px;" onclick="document.getElementById('import-song-file').click()">📥 曲を読み込む(1曲のファイル)</button>
+    <input type="file" id="import-song-file" accept="application/json" style="display:none" onchange="importSongFile(event)">
   </div>
 </div>
 
@@ -1391,6 +1394,54 @@ async function importBackup(event){
       if(data.settings){ settings = Object.assign(settings, data.settings); saveSettings(); applySettings(); }
       renderLibrary();
       await showConfirm('読み込みが完了しました。', {okOnly:true});
+    }catch(err){
+      await showConfirm('読み込みに失敗しました。\nファイルの形式を確認してください。', {okOnly:true});
+    }
+    event.target.value='';
+  };
+  reader.readAsText(file);
+}
+function exportSong(song){
+  const usedTypeKeys = Array.from(new Set((song.sections||[]).map(sec=>sec.type)));
+  const usedTypes = {};
+  usedTypeKeys.forEach(k=>{ if(sectionTypes[k]){ usedTypes[k] = sectionTypes[k]; } });
+  const usedCatKeys = Array.from(new Set(song.categoryIds||[]));
+  const usedCats = {};
+  usedCatKeys.forEach(k=>{ if(categories[k]){ usedCats[k] = categories[k]; } });
+  const data = JSON.stringify({type:'chordbook-song', song, sectionTypes:usedTypes, categories:usedCats}, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (song.title||'無題').replace(/[\\/:*?"<>|]/g,'_');
+  a.href = url; a.download = `${safeName}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+async function importSongFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      const songData = data.song || data;
+      if(!songData || typeof songData.title === 'undefined'){ throw new Error('invalid'); }
+      if(data.sectionTypes){
+        Object.keys(data.sectionTypes).forEach(k=>{ if(!sectionTypes[k]){ sectionTypes[k] = data.sectionTypes[k]; } });
+        saveSectionTypes();
+      }
+      if(data.categories){
+        Object.keys(data.categories).forEach(k=>{ if(!categories[k]){ categories[k] = data.categories[k]; } });
+        saveCategories();
+      }
+      const newSong = JSON.parse(JSON.stringify(songData));
+      newSong.id = uid();
+      migrateSongs([newSong]);
+      newSong.categoryIds = newSong.categoryIds || [];
+      songs.push(newSong);
+      saveSongs();
+      renderLibrary();
+      await showConfirm(`「${newSong.title||'無題'}」を読み込みました。`, {okOnly:true});
     }catch(err){
       await showConfirm('読み込みに失敗しました。\nファイルの形式を確認してください。', {okOnly:true});
     }
