@@ -780,6 +780,7 @@ function renderEdit(){
           <div class="edit-section-move">
             <button class="mini-btn" onclick="moveSection(${si},-1)">↑</button>
             <button class="mini-btn" onclick="moveSection(${si},1)">↓</button>
+            <button class="mini-btn" onclick="duplicateSection('${sec.id}')">📋</button>
             <button class="mini-btn danger" onclick="removeSection('${sec.id}')">🗑</button>
           </div>
         </div>
@@ -829,6 +830,15 @@ function moveSection(index, dir){
   if(newIndex<0 || newIndex>=editingSong.sections.length) return;
   const arr = editingSong.sections;
   [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
+  renderEdit();
+}
+function duplicateSection(secId){
+  const idx = editingSong.sections.findIndex(s=>s.id===secId);
+  if(idx<0) return;
+  const copy = JSON.parse(JSON.stringify(editingSong.sections[idx]));
+  copy.id = uid();
+  copy.items = (copy.items||[]).map(it=>Object.assign({}, it, {id: uid()}));
+  editingSong.sections.splice(idx+1, 0, copy);
   renderEdit();
 }
 function sectionsMatch(a, b){
