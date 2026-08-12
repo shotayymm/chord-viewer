@@ -51,6 +51,7 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
 /* 表示画面: セクションごとに1本の横棒(画面幅いっぱい)、3レーン(リフ/コード/歌詞) */
 .display-body{padding:16px 16px 60px;}
 .section-block{margin-bottom:10px;}
+.section-spacer{border-top:1px dashed var(--border); margin:18px 0;}
 .section-line{width:100%; background:var(--surface); border:2px solid var(--sec-color, var(--border));
   border-radius:10px; padding:8px 14px; position:relative;}
 .section-line-label{position:absolute; top:4px; left:4px; z-index:2; min-width:20px; text-align:center;
@@ -143,6 +144,8 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
 .edit-section-head select, .custom-label-input{padding:8px 10px; border-radius:8px; border:1px solid var(--border);
   background:var(--surface-2); color:var(--text); font-size:14px;}
 .edit-section-move{margin-left:auto; display:flex; gap:4px;}
+.section-drag-handle{touch-action:none; cursor:grab; font-size:15px;}
+.section-dragging{box-shadow:0 8px 20px rgba(0,0,0,.18); opacity:0.95; position:relative; z-index:10;}
 .mini-btn{background:var(--surface-2); border:1px solid var(--border); color:var(--text); border-radius:6px;
   padding:6px 9px; font-size:13px; cursor:pointer;}
 .mini-btn.active{background:var(--accent); color:#FFFFFF; border-color:var(--accent);}
@@ -319,6 +322,7 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
   <div class="sheet-card">
     <div class="sheet-head"><span>設定</span><button class="icon-btn" onclick="closeSettings()">✕</button></div>
     <button class="btn-block" style="text-align:center;" onclick="location.reload()">🔄 アプリを更新(最新の内容を反映)</button>
+    <div id="settings-scope-note" style="font-size:12px; color:var(--text-dim); margin:10px 2px 0;"></div>
     <div class="setting-row">
       <label>コードの文字サイズ</label>
       <input type="range" id="set-chordsize" min="12" max="28" step="1" oninput="onSettingChange()">
@@ -562,7 +566,7 @@ function loadData(){
   migrateSongs(songs);
   try{ settings = Object.assign({chordSize:16,lyricSize:13,laneHeight:22}, JSON.parse(localStorage.getItem('cb_settings')||'{}')); }
   catch(e){}
-  applySettings();
+  applyDisplaySettings(settings);
 }
 function loadSectionTypes(){
   try{ sectionTypes = JSON.parse(localStorage.getItem('cb_section_types')||'null') || JSON.parse(JSON.stringify(DEFAULT_SECTION_TYPES)); }
@@ -576,10 +580,14 @@ function loadCategories(){
 function saveCategories(){ localStorage.setItem('cb_categories', JSON.stringify(categories)); }
 function saveSongs(){ localStorage.setItem('cb_songs', JSON.stringify(songs)); }
 function saveSettings(){ localStorage.setItem('cb_settings', JSON.stringify(settings)); }
-function applySettings(){
-  document.documentElement.style.setProperty('--lane-h', settings.laneHeight+'px');
-  document.documentElement.style.setProperty('--chord-size', settings.chordSize+'px');
-  document.documentElement.style.setProperty('--lyric-size', settings.lyricSize+'px');
+function getSongDisplaySettings(song){
+  const base = {chordSize:settings.chordSize, lyricSize:settings.lyricSize, laneHeight:settings.laneHeight};
+  return (song && song.displaySettings) ? Object.assign(base, song.displaySettings) : base;
+}
+function applyDisplaySettings(effective){
+  document.documentElement.style.setProperty('--lane-h', effective.laneHeight+'px');
+  document.documentElement.style.setProperty('--chord-size', effective.chordSize+'px');
+  document.documentElement.style.setProperty('--lyric-size', effective.lyricSize+'px');
 }
 
 /* ===== 画面切り替え ===== */
@@ -640,6 +648,7 @@ function createNewSong(){
   originalSongSnapshot = JSON.stringify(editingSong);
   document.getElementById('edit-header-title').textContent = '新しい曲';
   document.getElementById('delete-song-btn').style.display = 'none';
+  applyDisplaySettings(getSongDisplaySettings(editingSong));
   renderEdit();
   showScreen('edit');
 }
@@ -647,6 +656,7 @@ function createNewSong(){
 /* ===== コード表示画面 ===== */
 function openDisplay(id){
   currentSongId = id;
+  applyDisplaySettings(getSongDisplaySettings(songs.find(s=>s.id===id)));
   renderDisplay();
   showScreen('display');
 }
@@ -661,18 +671,29 @@ function renderDisplay(){
     return;
   }
   const groups = groupConsecutiveSections(song.sections);
-  body.innerHTML = groups.map(group=>{
+  let html = '';
+  groups.forEach((group, gi)=>{
+    if(gi>0){
+      const prevLast = groups[gi-1][groups[gi-1].length-1];
+      const currFirst = group[0];
+      if(prevLast.spaceAfter || currFirst.spaceBefore){
+        html += '<div class="section-spacer"></div>';
+      }
+    }
     const meta = sectionMeta(group[0]);
     const inner = group.length>1 ? renderSectionLineGroupReadonly(group, meta) : renderSectionLineReadonly(group[0], meta);
-    return `<div class="section-block">${inner}</div>`;
-  }).join('');
+    html += `<div class="section-block">${inner}</div>`;
+  });
+  body.innerHTML = html;
 }
 function groupConsecutiveSections(sections){
   const groups = [];
   let i = 0;
   while(i < sections.length){
     let j = i+1;
-    while(j < sections.length && sectionsMatch(sections[i], sections[j])){ j++; }
+    while(j < sections.length &&
+          !sections[j-1].spaceAfter && !sections[j].spaceBefore &&
+          sectionsMatch(sections[i], sections[j])){ j++; }
     groups.push(sections.slice(i, j));
     i = j;
   }
@@ -756,6 +777,7 @@ function openEdit(songId){
   originalSongSnapshot = JSON.stringify(editingSong);
   document.getElementById('edit-header-title').textContent = '曲を編集';
   document.getElementById('delete-song-btn').style.display = 'block';
+  applyDisplaySettings(getSongDisplaySettings(editingSong));
   renderEdit();
   showScreen('edit');
 }
@@ -773,13 +795,14 @@ function renderEdit(){
       `<option value="${k}" ${sec.type===k?'selected':''}>${escapeHtml(sectionTypes[k].label)}</option>`
     ).join('');
     return `
-      <div class="edit-section" style="--sec-color:${meta.color}">
+      <div class="edit-section" style="--sec-color:${meta.color}" data-sec="${sec.id}">
         <div class="edit-section-head">
+          <button class="mini-btn section-drag-handle" data-sec="${sec.id}">⠿</button>
           <select onchange="updateSectionType('${sec.id}', this.value)">${options}</select>
           ${sec.type==='custom'?`<input class="custom-label-input" placeholder="セクション名" value="${escapeHtml(sec.customLabel)}" oninput="updateSectionLabel('${sec.id}', this.value)">`:''}
           <div class="edit-section-move">
-            <button class="mini-btn" onclick="moveSection(${si},-1)">↑</button>
-            <button class="mini-btn" onclick="moveSection(${si},1)">↓</button>
+            <button class="mini-btn ${sec.spaceBefore?'active':''}" onclick="toggleSectionSpace('${sec.id}','spaceBefore')">↑余白</button>
+            <button class="mini-btn ${sec.spaceAfter?'active':''}" onclick="toggleSectionSpace('${sec.id}','spaceAfter')">↓余白</button>
             <button class="mini-btn" onclick="duplicateSection('${sec.id}')">📋</button>
             <button class="mini-btn danger" onclick="removeSection('${sec.id}')">🗑</button>
           </div>
@@ -789,6 +812,7 @@ function renderEdit(){
       </div>`;
   }).join('');
   attachAllDragHandlers();
+  attachSectionDragHandlers();
 }
 function renderEditSectionLine(sec, meta){
   const items = sec.items || [];
@@ -825,12 +849,75 @@ async function removeSection(secId){
   editingSong.sections = editingSong.sections.filter(s=>s.id!==secId);
   renderEdit();
 }
-function moveSection(index, dir){
-  const newIndex = index+dir;
-  if(newIndex<0 || newIndex>=editingSong.sections.length) return;
-  const arr = editingSong.sections;
-  [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
+function toggleSectionSpace(secId, field){
+  const sec = editingSong.sections.find(s=>s.id===secId);
+  sec[field] = !sec[field];
   renderEdit();
+}
+
+/* ===== セクションの長押しドラッグによる並べ替え ===== */
+let sectionDragState = null;
+function attachSectionDragHandlers(){
+  document.querySelectorAll('.section-drag-handle').forEach(handle=>{
+    const blockEl = handle.closest('.edit-section');
+    handle.addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      sectionDragState = {
+        handle, blockEl,
+        startY: e.clientY,
+        dragging: false,
+        pointerId: e.pointerId
+      };
+      sectionDragState.timer = setTimeout(()=>{
+        if(!sectionDragState || sectionDragState.handle!==handle) return;
+        sectionDragState.dragging = true;
+        blockEl.classList.add('section-dragging');
+        const container = blockEl.parentElement;
+        const allSiblings = Array.from(container.children);
+        sectionDragState.originIndex = allSiblings.indexOf(blockEl);
+        sectionDragState.otherMidpoints = allSiblings
+          .filter(el=>el!==blockEl)
+          .map(el=>{ const r=el.getBoundingClientRect(); return r.top + r.height/2; });
+        try{ handle.setPointerCapture(sectionDragState.pointerId); }catch(err){}
+      }, 380);
+    });
+    handle.addEventListener('pointermove', e=>{
+      if(!sectionDragState || sectionDragState.handle!==handle) return;
+      const dy = e.clientY - sectionDragState.startY;
+      if(!sectionDragState.dragging){
+        if(Math.abs(dy) > 8){ clearTimeout(sectionDragState.timer); sectionDragState = null; }
+        return;
+      }
+      blockEl.style.transform = `translateY(${dy}px)`;
+    });
+    handle.addEventListener('pointerup', ()=>{
+      if(!sectionDragState || sectionDragState.handle!==handle) return;
+      clearTimeout(sectionDragState.timer);
+      if(sectionDragState.dragging){
+        const rect = blockEl.getBoundingClientRect();
+        const currentMid = rect.top + rect.height/2;
+        let targetIndex = 0;
+        sectionDragState.otherMidpoints.forEach(m=>{ if(currentMid > m) targetIndex++; });
+        blockEl.style.transform = '';
+        blockEl.classList.remove('section-dragging');
+        const arr = editingSong.sections;
+        const [moved] = arr.splice(sectionDragState.originIndex, 1);
+        arr.splice(targetIndex, 0, moved);
+        sectionDragState = null;
+        renderEdit();
+      }else{
+        sectionDragState = null;
+      }
+    });
+    handle.addEventListener('pointercancel', ()=>{
+      if(sectionDragState && sectionDragState.handle===handle){
+        clearTimeout(sectionDragState.timer);
+        blockEl.style.transform = '';
+        blockEl.classList.remove('section-dragging');
+        sectionDragState = null;
+      }
+    });
+  });
 }
 function duplicateSection(secId){
   const idx = editingSong.sections.findIndex(s=>s.id===secId);
@@ -1190,20 +1277,36 @@ function closeRiffEditor(){
   selectedCell = null;
 }
 
-/* ===== 設定 ===== */
+/* ===== 設定(表示中の曲があればその曲専用、なければ新規曲のデフォルト) ===== */
+let settingsSongContext = null;
 function openSettings(){
-  document.getElementById('set-chordsize').value = settings.chordSize;
-  document.getElementById('set-lyricsize').value = settings.lyricSize;
-  document.getElementById('set-laneheight').value = settings.laneHeight;
+  const isDisplayActive = document.getElementById('screen-display').classList.contains('active');
+  settingsSongContext = isDisplayActive ? songs.find(s=>s.id===currentSongId) : null;
+  const effective = settingsSongContext ? getSongDisplaySettings(settingsSongContext) : settings;
+  document.getElementById('set-chordsize').value = effective.chordSize;
+  document.getElementById('set-lyricsize').value = effective.lyricSize;
+  document.getElementById('set-laneheight').value = effective.laneHeight;
+  document.getElementById('settings-scope-note').textContent = settingsSongContext
+    ? `「${settingsSongContext.title||'無題'}」の表示設定`
+    : '新しい曲のデフォルト表示設定';
   document.getElementById('settings-sheet').classList.remove('hidden');
 }
 function closeSettings(){ document.getElementById('settings-sheet').classList.add('hidden'); }
 function onSettingChange(){
-  settings.laneHeight = +document.getElementById('set-laneheight').value;
-  settings.chordSize = +document.getElementById('set-chordsize').value;
-  settings.lyricSize = +document.getElementById('set-lyricsize').value;
-  applySettings();
-  saveSettings();
+  const chordSize = +document.getElementById('set-chordsize').value;
+  const lyricSize = +document.getElementById('set-lyricsize').value;
+  const laneHeight = +document.getElementById('set-laneheight').value;
+  if(settingsSongContext){
+    settingsSongContext.displaySettings = {chordSize, lyricSize, laneHeight};
+    saveSongs();
+    applyDisplaySettings(getSongDisplaySettings(settingsSongContext));
+  }else{
+    settings.chordSize = chordSize;
+    settings.lyricSize = lyricSize;
+    settings.laneHeight = laneHeight;
+    saveSettings();
+    applyDisplaySettings(settings);
+  }
 }
 
 /* ===== セクションの種類(ラベル名・略称)の管理 ===== */
@@ -1401,7 +1504,7 @@ async function importBackup(event){
       if(data.sectionTypes){ sectionTypes = data.sectionTypes; saveSectionTypes(); }
       if(data.categories){ categories = data.categories; saveCategories(); }
       if(data.songs){ songs = migrateSongs(data.songs); saveSongs(); }
-      if(data.settings){ settings = Object.assign(settings, data.settings); saveSettings(); applySettings(); }
+      if(data.settings){ settings = Object.assign(settings, data.settings); saveSettings(); applyDisplaySettings(settings); }
       renderLibrary();
       await showConfirm('読み込みが完了しました。', {okOnly:true});
     }catch(err){
