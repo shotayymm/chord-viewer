@@ -69,6 +69,7 @@ html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
 .ro-item.item-lyric{font-size:var(--lyric-size); color:var(--text-dim);}
 .ro-item.item-riff-marker{width:13px; height:13px; border-radius:50%; background:var(--accent); cursor:pointer;
   box-shadow:0 0 0 2px var(--surface);}
+.ro-item.item-riff-marker.memo-type{border-radius:3px;}
 .empty-inline{color:var(--text-dim); font-size:13px; padding:10px 0;}
 
 /* オーバーレイ(設定/リフ/確認/追加メニュー) */
@@ -144,7 +145,10 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
 .edit-section-head select, .custom-label-input{padding:8px 10px; border-radius:8px; border:1px solid var(--border);
   background:var(--surface-2); color:var(--text); font-size:14px;}
 .edit-section-move{margin-left:auto; display:flex; gap:4px;}
-.section-drag-handle{touch-action:none; cursor:grab; font-size:15px;}
+.section-drag-handle{touch-action:none; cursor:grab; font-size:15px;
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;}
+.edit-section{user-select:none; -webkit-user-select:none;}
+.edit-section input, .edit-section select, .edit-section textarea{user-select:text; -webkit-user-select:text;}
 .section-dragging{box-shadow:0 8px 20px rgba(0,0,0,.18); opacity:0.95; position:relative; z-index:10;}
 .mini-btn{background:var(--surface-2); border:1px solid var(--border); color:var(--text); border-radius:6px;
   padding:6px 9px; font-size:13px; cursor:pointer;}
@@ -152,6 +156,8 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
 .mini-btn.danger{color:var(--danger); border-color:var(--danger);}
 .btn-mini-block{margin-top:10px; width:100%; padding:8px; border-radius:8px; border:1px dashed var(--border);
   background:none; color:var(--text-dim); cursor:pointer; font-size:13px;}
+.add-item-buttons-row{display:flex; gap:6px;}
+.add-item-buttons-row .btn-mini-block{flex:1; margin-top:10px;}
 .edit-item{position:absolute; top:50%; transform:translate(-50%,-50%); touch-action:none; cursor:pointer;
   user-select:none; -webkit-user-select:none; white-space:nowrap;}
 .edit-item.item-chord{font-family:var(--mono); font-weight:700; font-size:13px; background:var(--surface-2);
@@ -160,6 +166,7 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
   border-radius:6px; padding:2px 7px; color:var(--text-dim);}
 .edit-item.item-riff-marker{width:18px; height:18px; border-radius:50%; background:var(--accent);
   border:2px solid var(--surface); box-shadow:0 0 0 1px var(--border);}
+.edit-item.item-riff-marker.memo-type{border-radius:4px;}
 .edit-item.dragging{box-shadow:0 4px 10px rgba(0,0,0,.22); z-index:5; opacity:0.9;}
 </style>
 </head>
@@ -295,16 +302,6 @@ hr{border:none; border-top:1px solid var(--border); margin:16px 0;}
   </div>
 </div>
 
-<!-- 追加する種類の選択 -->
-<div id="add-item-modal" class="overlay hidden">
-  <div class="sheet-card">
-    <div class="sheet-head"><span>追加する種類を選択</span><button class="icon-btn" onclick="closeAddItemMenu()">✕</button></div>
-    <button class="btn-block" onclick="addItem('chord')">🎵 コードを追加</button>
-    <button class="btn-block" onclick="addItem('lyric')">📝 歌詞を追加</button>
-    <button class="btn-block" onclick="addItem('riff')">🎸 リフ / オブリガードを追加</button>
-  </div>
-</div>
-
 
 <!-- 確認ダイアログ(共通) -->
 <div id="confirm-modal" class="overlay hidden">
@@ -437,7 +434,6 @@ let tabEditorGrid = [];
 let selectedCell = null;
 let confirmResolve = null;
 let itemEditorContext = null; // {secId, itemId}
-let addItemContext = null; // {secId}
 let dragState = null;
 
 /* ===== ユーティリティ ===== */
@@ -702,9 +698,10 @@ function groupConsecutiveSections(sections){
 function renderLanesHtml(sec){
   const items = sec.items || [];
   if(items.length===0){ return '<div class="empty-inline">要素なし</div>'; }
-  const riffHtml = items.filter(it=>it.type==='riff').map(it=>
-    `<div class="ro-item item-riff-marker" style="left:${clampPos(it.pos)}%" onclick="openRiffViewByIds('${sec.id}','${it.id}')"></div>`
-  ).join('');
+  const riffHtml = items.filter(it=>it.type==='riff').map(it=>{
+    const memoClass = (it.riff && it.riff.type==='memo') ? ' memo-type' : '';
+    return `<div class="ro-item item-riff-marker${memoClass}" style="left:${clampPos(it.pos)}%" onclick="openRiffViewByIds('${sec.id}','${it.id}')"></div>`;
+  }).join('');
   const chordHtml = items.filter(it=>it.type==='chord').map(it=>
     `<div class="ro-item item-chord" style="left:${clampPos(it.pos)}%">${escapeHtml(it.value||'—')}</div>`
   ).join('');
@@ -808,7 +805,11 @@ function renderEdit(){
           </div>
         </div>
         ${renderEditSectionLine(sec, meta)}
-        <button class="btn-mini-block" onclick="openAddItemMenu('${sec.id}')">＋ 要素を追加(コード/歌詞/リフ)</button>
+        <div class="add-item-buttons-row">
+          <button class="btn-mini-block" onclick="addItemDirect('${sec.id}','chord')">＋コード</button>
+          <button class="btn-mini-block" onclick="addItemDirect('${sec.id}','lyric')">＋歌詞</button>
+          <button class="btn-mini-block" onclick="addItemDirect('${sec.id}','riff')">＋リフ</button>
+        </div>
       </div>`;
   }).join('');
   attachAllDragHandlers();
@@ -816,9 +817,10 @@ function renderEdit(){
 }
 function renderEditSectionLine(sec, meta){
   const items = sec.items || [];
-  const riffHtml = items.filter(it=>it.type==='riff').map(it=>
-    `<div class="edit-item item-riff-marker" data-sec="${sec.id}" data-item="${it.id}" style="left:${clampPos(it.pos)}%"></div>`
-  ).join('');
+  const riffHtml = items.filter(it=>it.type==='riff').map(it=>{
+    const memoClass = (it.riff && it.riff.type==='memo') ? ' memo-type' : '';
+    return `<div class="edit-item item-riff-marker${memoClass}" data-sec="${sec.id}" data-item="${it.id}" style="left:${clampPos(it.pos)}%"></div>`;
+  }).join('');
   const chordHtml = items.filter(it=>it.type==='chord').map(it=>
     `<div class="edit-item item-chord" data-sec="${sec.id}" data-item="${it.id}" style="left:${clampPos(it.pos)}%">${escapeHtml(it.value||'?')}</div>`
   ).join('');
@@ -858,6 +860,7 @@ function toggleSectionSpace(secId, field){
 /* ===== セクションの長押しドラッグによる並べ替え ===== */
 let sectionDragState = null;
 function attachSectionDragHandlers(){
+  const container = document.getElementById('edit-sections');
   document.querySelectorAll('.section-drag-handle').forEach(handle=>{
     const blockEl = handle.closest('.edit-section');
     handle.addEventListener('pointerdown', e=>{
@@ -872,12 +875,16 @@ function attachSectionDragHandlers(){
         if(!sectionDragState || sectionDragState.handle!==handle) return;
         sectionDragState.dragging = true;
         blockEl.classList.add('section-dragging');
-        const container = blockEl.parentElement;
-        const allSiblings = Array.from(container.children);
-        sectionDragState.originIndex = allSiblings.indexOf(blockEl);
-        sectionDragState.otherMidpoints = allSiblings
-          .filter(el=>el!==blockEl)
-          .map(el=>{ const r=el.getBoundingClientRect(); return r.top + r.height/2; });
+        const allEls = Array.from(container.children);
+        const rects = allEls.map(el=>el.getBoundingClientRect());
+        const originIndex = allEls.indexOf(blockEl);
+        sectionDragState.originIndex = originIndex;
+        sectionDragState.currentTargetIndex = originIndex;
+        sectionDragState.originalCenter = rects[originIndex].top + rects[originIndex].height/2;
+        sectionDragState.draggedHeight = rects[originIndex].height + 16;
+        sectionDragState.otherEls = allEls
+          .map((el,idx)=>({el, idx, center: rects[idx].top + rects[idx].height/2}))
+          .filter(o=>o.idx!==originIndex);
         try{ handle.setPointerCapture(sectionDragState.pointerId); }catch(err){}
       }, 380);
     });
@@ -889,20 +896,30 @@ function attachSectionDragHandlers(){
         return;
       }
       blockEl.style.transform = `translateY(${dy}px)`;
+      const currentCenter = sectionDragState.originalCenter + dy;
+      let count = 0;
+      sectionDragState.otherEls.forEach(o=>{ if(currentCenter > o.center) count++; });
+      sectionDragState.currentTargetIndex = count;
+      sectionDragState.otherEls.forEach(o=>{
+        let shift = 0;
+        if(sectionDragState.currentTargetIndex > sectionDragState.originIndex &&
+           o.idx > sectionDragState.originIndex && o.idx <= sectionDragState.currentTargetIndex){
+          shift = -sectionDragState.draggedHeight;
+        }else if(sectionDragState.currentTargetIndex < sectionDragState.originIndex &&
+           o.idx >= sectionDragState.currentTargetIndex && o.idx < sectionDragState.originIndex){
+          shift = sectionDragState.draggedHeight;
+        }
+        o.el.style.transition = 'transform 0.15s ease';
+        o.el.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
     });
     handle.addEventListener('pointerup', ()=>{
       if(!sectionDragState || sectionDragState.handle!==handle) return;
       clearTimeout(sectionDragState.timer);
       if(sectionDragState.dragging){
-        const rect = blockEl.getBoundingClientRect();
-        const currentMid = rect.top + rect.height/2;
-        let targetIndex = 0;
-        sectionDragState.otherMidpoints.forEach(m=>{ if(currentMid > m) targetIndex++; });
-        blockEl.style.transform = '';
-        blockEl.classList.remove('section-dragging');
         const arr = editingSong.sections;
         const [moved] = arr.splice(sectionDragState.originIndex, 1);
-        arr.splice(targetIndex, 0, moved);
+        arr.splice(sectionDragState.currentTargetIndex, 0, moved);
         sectionDragState = null;
         renderEdit();
       }else{
@@ -912,9 +929,8 @@ function attachSectionDragHandlers(){
     handle.addEventListener('pointercancel', ()=>{
       if(sectionDragState && sectionDragState.handle===handle){
         clearTimeout(sectionDragState.timer);
-        blockEl.style.transform = '';
-        blockEl.classList.remove('section-dragging');
         sectionDragState = null;
+        renderEdit();
       }
     });
   });
@@ -925,7 +941,7 @@ function duplicateSection(secId){
   const copy = JSON.parse(JSON.stringify(editingSong.sections[idx]));
   copy.id = uid();
   copy.items = (copy.items||[]).map(it=>Object.assign({}, it, {id: uid()}));
-  editingSong.sections.splice(idx+1, 0, copy);
+  editingSong.sections.push(copy);
   renderEdit();
 }
 function sectionsMatch(a, b){
@@ -963,26 +979,16 @@ async function deleteSong(){
 }
 
 /* ===== 要素の追加/編集(コード・歌詞・リフ) ===== */
-function openAddItemMenu(secId){
-  addItemContext = {secId};
-  document.getElementById('add-item-modal').classList.remove('hidden');
-}
-function closeAddItemMenu(){
-  document.getElementById('add-item-modal').classList.add('hidden');
-  addItemContext = null;
-}
-function addItem(type){
-  const ctx = addItemContext;
-  const sec = editingSong.sections.find(s=>s.id===ctx.secId);
+function addItemDirect(secId, type){
+  const sec = editingSong.sections.find(s=>s.id===secId);
   const newItem = {id:uid(), type, pos:50};
   if(type==='chord' || type==='lyric'){ newItem.value=''; }
   if(type==='riff'){ newItem.riff=null; }
   sec.items.push(newItem);
-  closeAddItemMenu();
   renderEdit();
-  if(type==='riff'){ openRiffEditorForItem(ctx.secId, newItem.id); }
-  else if(type==='chord'){ openChordPickerForItem(ctx.secId, newItem.id); }
-  else{ openValueEditor(ctx.secId, newItem.id); }
+  if(type==='riff'){ openRiffEditorForItem(secId, newItem.id); }
+  else if(type==='chord'){ openChordPickerForItem(secId, newItem.id); }
+  else{ openValueEditor(secId, newItem.id); }
 }
 function openItemEditor(secId, itemId){
   const item = findItem(secId, itemId);
