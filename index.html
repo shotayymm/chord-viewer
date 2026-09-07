@@ -17,6 +17,15 @@
   --chord-size:16px; --lyric-size:13px; --lane-h:22px;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+button, .song-card, .category-group-title{position:relative; overflow:hidden;}
+button.tap-pop::after, .song-card.tap-pop::after, .category-group-title.tap-pop::after{
+  content:''; position:absolute; inset:0; background:rgba(255,255,255,0.55);
+  border-radius:inherit; pointer-events:none; animation:tap-pop-fade 0.35s ease-out;
+}
+@keyframes tap-pop-fade{
+  0%{ opacity:0.7; transform:scale(1); }
+  100%{ opacity:0; transform:scale(1.08); }
+}
 html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
   font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
   overscroll-behavior:none;}
@@ -447,6 +456,10 @@ function clampPos(p){
   p = Number(p);
   if(isNaN(p)) p = 50;
   return Math.max(0, Math.min(100, p));
+}
+function snapToGrid(p){
+  const step = 100/16;
+  return Math.round(p/step)*step;
 }
 function sectionMeta(sec){
   const base = sectionTypes[sec.type] || sectionTypes.custom;
@@ -981,9 +994,15 @@ async function deleteSong(){
 }
 
 /* ===== 要素の追加/編集(コード・歌詞・リフ) ===== */
+function nextAutoPos(sec, type){
+  const step = 100/16;
+  const existing = (sec.items||[]).filter(it=>it.type===type).map(it=>it.pos||0);
+  if(existing.length===0) return 0;
+  return Math.min(100, snapToGrid(Math.max(...existing) + step));
+}
 function addItemDirect(secId, type){
   const sec = editingSong.sections.find(s=>s.id===secId);
-  const newItem = {id:uid(), type, pos:50};
+  const newItem = {id:uid(), type, pos:nextAutoPos(sec, type)};
   if(type==='chord' || type==='lyric'){ newItem.value=''; }
   if(type==='riff'){ newItem.riff=null; }
   sec.items.push(newItem);
@@ -1027,7 +1046,7 @@ function closeItemEditor(){
 const ROOT_NOTES = ['C','D','E','F','G','A','B'];
 const ACCIDENTALS = [{key:'', label:'♮'}, {key:'#', label:'♯'}, {key:'♭', label:'♭'}];
 const QUALITIES_MAIN = [
-  {key:'', label:'無印'}, {key:'M7', label:'M7'}, {key:'m', label:'m'},
+  {key:'', label:'無印'}, {key:'△7', label:'△7'}, {key:'m', label:'m'},
   {key:'m7', label:'m7'}, {key:'7', label:'7'}, {key:'m7♭5', label:'m7♭5'}
 ];
 const QUALITIES_EXTRA = [
@@ -1152,9 +1171,9 @@ function attachItemDragHandlers(el, secId, itemId){
       return;
     }
     const rect = dragState.laneEl.getBoundingClientRect();
-    const pct = clampPos(((e.clientX - rect.left) / rect.width) * 100);
+    const pct = snapToGrid(clampPos(((e.clientX - rect.left) / rect.width) * 100));
     el.style.left = pct+'%';
-    dragState.newPos = Math.round(pct);
+    dragState.newPos = Math.round(pct*100)/100;
   });
   el.addEventListener('pointerup', ()=>{
     if(!dragState || dragState.el!==el) return;
@@ -1577,6 +1596,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
   renderLibrary();
   const iconLink = document.querySelector('link[rel="apple-touch-icon"]');
   if(iconLink){ document.getElementById('app-logo-icon').src = iconLink.href; }
+  document.addEventListener('pointerdown', e=>{
+    const el = e.target.closest('button, .song-card, .category-group-title');
+    if(!el) return;
+    el.classList.remove('tap-pop');
+    void el.offsetWidth;
+    el.classList.add('tap-pop');
+  });
   document.getElementById('confirm-ok-btn').addEventListener('click', ()=>{
     document.getElementById('confirm-modal').classList.add('hidden');
     const r = confirmResolve; confirmResolve = null;
