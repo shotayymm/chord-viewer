@@ -457,8 +457,11 @@ function clampPos(p){
   if(isNaN(p)) p = 50;
   return Math.max(0, Math.min(100, p));
 }
-function snapToGrid(p){
-  const step = 100/16;
+function getGridDivisions(type){
+  return type==='lyric' ? 64 : 16;
+}
+function snapToGrid(p, divisions){
+  const step = 100/(divisions||16);
   return Math.round(p/step)*step;
 }
 function sectionMeta(sec){
@@ -995,10 +998,11 @@ async function deleteSong(){
 
 /* ===== 要素の追加/編集(コード・歌詞・リフ) ===== */
 function nextAutoPos(sec, type){
-  const step = 100/16;
+  const divisions = getGridDivisions(type);
+  const step = 100/divisions;
   const existing = (sec.items||[]).filter(it=>it.type===type).map(it=>it.pos||0);
   if(existing.length===0) return 0;
-  return Math.min(100, snapToGrid(Math.max(...existing) + step));
+  return Math.min(100, snapToGrid(Math.max(...existing) + step, divisions));
 }
 function addItemDirect(secId, type){
   const sec = editingSong.sections.find(s=>s.id===secId);
@@ -1155,6 +1159,8 @@ function attachItemDragHandlers(el, secId, itemId){
     dragState.timer = setTimeout(()=>{
       if(!dragState || dragState.el!==el) return;
       dragState.dragging = true;
+      const item = findItem(secId, itemId);
+      dragState.divisions = getGridDivisions(item ? item.type : null);
       el.classList.add('dragging');
       try{ el.setPointerCapture(dragState.pointerId); }catch(err){}
     }, 380);
@@ -1171,7 +1177,7 @@ function attachItemDragHandlers(el, secId, itemId){
       return;
     }
     const rect = dragState.laneEl.getBoundingClientRect();
-    const pct = snapToGrid(clampPos(((e.clientX - rect.left) / rect.width) * 100));
+    const pct = snapToGrid(clampPos(((e.clientX - rect.left) / rect.width) * 100), dragState.divisions);
     el.style.left = pct+'%';
     dragState.newPos = Math.round(pct*100)/100;
   });
